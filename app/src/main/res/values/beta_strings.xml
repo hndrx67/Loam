@@ -35,8 +35,8 @@
     <string name="image_transitions_description">Fade images in and animate filmstrip jumps. Turn off for immediate changes.</string>
     <string name="watch_changes">Live library updates</string>
     <string name="watch_changes_description">Watch for media changes while Loam is open. Manual refresh and refresh on return remain available.</string>
-    <string name="clear_cache">Clear image memory cache</string>
-    <string name="cache_cleared">Image memory cache cleared. Your media is unchanged.</string>
+    <string name="clear_cache">Clear image cache</string>
+    <string name="cache_cleared">Image cache cleared. Your media is unchanged.</string>
     <string name="reset_performance">Reset performance settings</string>
     <string name="storage_section">Media and storage</string>
     <string name="recycle_bin">Recycle bin</string>

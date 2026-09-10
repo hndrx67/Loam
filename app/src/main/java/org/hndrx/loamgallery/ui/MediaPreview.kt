@@ -32,8 +32,10 @@ fun MediaPreview(uri: Uri, description: String, modifier: Modifier = Modifier, c
     val settings = LocalLoamSettings.current
     val loader = LocalLoamImages.current
     val context = LocalContext.current
-    val request = remember(uri, settings.thumbnailSize, settings.lowMemoryThumbnails, settings.transitions, thumbnail) {
-        ImageRequest.Builder(context).data(uri).crossfade(if (settings.transitions) 150 else 0).apply {
+    var bypassCache by remember(uri, settings.thumbnailSize) { mutableStateOf(false) }
+    val request = remember(uri, settings.thumbnailSize, settings.lowMemoryThumbnails, settings.transitions, thumbnail, isVideo, bypassCache) {
+        val cached = if (thumbnail && !isVideo && !bypassCache) org.hndrx.loamgallery.data.ThumbnailCache.file(context, uri, settings).takeIf { it.isFile } else null
+        ImageRequest.Builder(context).data(cached ?: uri).crossfade(if (settings.transitions) 150 else 0).apply {
             if (thumbnail) {
                 size(settings.thumbnailSize).precision(Precision.INEXACT)
                 allowRgb565(settings.lowMemoryThumbnails)
@@ -55,6 +57,10 @@ fun MediaPreview(uri: Uri, description: String, modifier: Modifier = Modifier, c
         AsyncImage(model = request, imageLoader = loader, contentDescription = description, modifier = Modifier.fillMaxSize(), contentScale = contentScale,
             onLoading = { loading = true; failed = false },
             onSuccess = { loading = false; failed = false; onLoadedSize(it.result.image.width, it.result.image.height) },
-            onError = { loading = false; failed = true })
+            onError = {
+                if (request.data is java.io.File && !bypassCache) {
+                    bypassCache = true
+                } else { loading = false; failed = true }
+            })
     }
 }

@@ -40,10 +40,42 @@ data class LibraryState(
     val access: MediaAccess = MediaAccess.None,
 )
 
+data class ThumbnailPreloadState(val running: Boolean = false, val completed: Int = 0, val total: Int = 0, val failed: Int = 0)
+
 data class TrashState(val items: List<TrashEntry> = emptyList(), val loading: Boolean = false, val failed: Boolean = false)
 data class OperationConsent(val sender: IntentSender?, val permission: String? = null, val token: String = UUID.randomUUID().toString())
 
 class GalleryViewModel(app: Application, private val savedState: SavedStateHandle) : AndroidViewModel(app) {
+    private val _thumbnailPreload = MutableStateFlow(ThumbnailPreloadState())
+    val thumbnailPreload = _thumbnailPreload.asStateFlow()
+    private var thumbnailJob: Job? = null
+
+    fun startThumbnailPreload() {
+        if (thumbnailJob?.isActive == true || _library.value.loading || !_library.value.loaded) return
+        val pictures = _library.value.media.filter { !it.isVideo }.toList()
+        val options = _settings.value
+        if (pictures.isEmpty()) return
+        _thumbnailPreload.value = ThumbnailPreloadState(running = true, total = pictures.size)
+        thumbnailJob = viewModelScope.launch {
+            val loader = coil3.ImageLoader.Builder(getApplication()).memoryCache(null).build()
+            try {
+                for (picture in pictures) {
+                    var failed = false
+                    try {
+                        org.hndrx.loamgallery.data.ThumbnailCache.preload(getApplication(), loader, picture.uri, options)
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { failed = true }
+                    _thumbnailPreload.value = _thumbnailPreload.value.let {
+                        it.copy(completed = it.completed + 1, failed = it.failed + if (failed) 1 else 0)
+                    }
+                }
+            } finally {
+                loader.shutdown()
+                _thumbnailPreload.value = _thumbnailPreload.value.copy(running = false)
+            }
+        }
+    }
+
     private val repository = MediaRepository(app)
     private val prefs = app.getSharedPreferences("loam", 0)
     private val settingsStore = SettingsStore(prefs)
@@ -243,7 +275,16 @@ class GalleryViewModel(app: Application, private val savedState: SavedStateHandl
 
     fun operationLaunchFailed() { finishOperation(R.string.operation_failed) }
     fun dismissMessage() { _message.value = null }
-    fun cacheCleared() { _message.value = R.string.cache_cleared }
+    fun cacheCleared() {
+        if (thumbnailJob?.isActive == true) return
+        thumbnailJob = viewModelScope.launch {
+            try {
+                org.hndrx.loamgallery.data.ThumbnailCache.clear(getApplication())
+                _thumbnailPreload.value = ThumbnailPreloadState()
+                _message.value = R.string.cache_cleared
+            } catch (_: Exception) { _message.value = R.string.thumbnail_cache_clear_failed }
+        }
+    }
 
     private fun finishOperation(message: Int) {
         savedState.remove<Bundle>("operation")

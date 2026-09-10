@@ -25,7 +25,8 @@ import org.hndrx.loamgallery.model.*
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(settings: AppSettings, access: MediaAccess, trashCount: Int, update: (AppSettings) -> Unit,
-    openBin: () -> Unit, requestAccess: () -> Unit, openSystemSettings: () -> Unit, clearCache: () -> Unit) {
+    openBin: () -> Unit, requestAccess: () -> Unit, openSystemSettings: () -> Unit, clearCache: () -> Unit,
+    preload: org.hndrx.loamgallery.ThumbnailPreloadState, canPreload: Boolean, startPreload: () -> Unit) {
     var columns by remember(settings.columns) { mutableFloatStateOf(settings.columns.toFloat()) }
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item {
@@ -76,7 +77,17 @@ fun SettingsScreen(settings: AppSettings, access: MediaAccess, trashCount: Int, 
                 SettingSwitch(R.string.video_thumbnails, R.string.video_thumbnails_description, settings.videoThumbnails) { update(settings.copy(videoThumbnails = it)) }
                 SettingSwitch(R.string.image_transitions, R.string.image_transitions_description, settings.transitions) { update(settings.copy(transitions = it)) }
                 SettingSwitch(R.string.watch_changes, R.string.watch_changes_description, settings.watchChanges) { update(settings.copy(watchChanges = it)) }
-                TextButton(onClick = clearCache) { Text(stringResource(R.string.clear_cache)) }
+                HelpText(R.string.thumbnail_preload_description)
+                Button(onClick = startPreload, enabled = canPreload && !preload.running) {
+                    Text(stringResource(R.string.start_thumbnail_preload))
+                }
+                if (preload.total > 0) {
+                    if (preload.running) LinearProgressIndicator(
+                        progress = { preload.completed.toFloat() / preload.total }, modifier = Modifier.fillMaxWidth())
+                    Text(stringResource(if (preload.running) R.string.thumbnail_preload_progress else R.string.thumbnail_preload_complete,
+                        preload.completed - preload.failed, preload.total, preload.failed), style = MaterialTheme.typography.bodySmall)
+                }
+                TextButton(onClick = clearCache, enabled = !preload.running) { Text(stringResource(R.string.clear_cache)) }
                 TextButton(onClick = { update(settings.resetPerformance()) }) { Text(stringResource(R.string.reset_performance)) }
             }
         }

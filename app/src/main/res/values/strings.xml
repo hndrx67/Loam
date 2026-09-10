@@ -56,4 +56,9 @@
     <string name="other_album">Other</string>
     <plurals name="item_count"><item quantity="one">%d item</item><item quantity="other">%d items</item></plurals>
     <plurals name="album_count"><item quantity="one">%d album</item><item quantity="other">%d albums</item></plurals>
+    <string name="start_thumbnail_preload">Start Thumbnail Preload</string>
+    <string name="thumbnail_preload_description">Prepare thumbnails for all currently accessible pictures at the selected quality. New pictures are included only when you start again. Uses cache storage; Android or Clear cache may remove it. Keep the app open until finished.</string>
+    <string name="thumbnail_preload_progress">Preloading: %1$d of %2$d saved; %3$d failed</string>
+    <string name="thumbnail_preload_complete">Preload finished: %1$d of %2$d saved; %3$d failed</string>
+    <string name="thumbnail_cache_clear_failed">Could not clear all thumbnail files. Try again.</string>
 </resources>

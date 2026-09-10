@@ -95,6 +95,7 @@ fun LoamApp(vm: GalleryViewModel, requestAccess: () -> Unit, openSettings: () ->
     LoamTheme(preferences) {
         ImageLoading(preferences) {
             val imageLoader = LocalLoamImages.current
+            val preload by vm.thumbnailPreload.collectAsStateWithLifecycle()
             Box(Modifier.fillMaxSize()) {
                 if (external != null) {
                     Viewer(listOf(external!!), external!!.uri.toString(), emptySet(), {}, null, close = vm::closeExternal)
@@ -160,7 +161,8 @@ fun LoamApp(vm: GalleryViewModel, requestAccess: () -> Unit, openSettings: () ->
                                     tab == Tab.Settings && recycleBin -> RecycleBinScreen(trash, busy, vm::refreshTrash) { entry, action -> vm.requestOperation(entry.asset, action, entry.localKey) }
                                     tab == Tab.Settings -> gridStateHolder.SaveableStateProvider("settings") {
                                         SettingsScreen(preferences, library.access, trash.items.size, vm::updateSettings,
-                                            { recycleBin = true }, requestAccess, openSettings, { imageLoader.memoryCache?.clear(); vm.cacheCleared() })
+                                            { recycleBin = true }, requestAccess, openSettings, { imageLoader.memoryCache?.clear(); vm.cacheCleared() },
+                                            preload, library.loaded && !library.loading && library.media.any { !it.isVideo }, vm::startThumbnailPreload)
                                     }
                                     library.access == MediaAccess.None -> EmptyState(R.string.permission_title, R.string.permission_message, Icons.Default.PhotoLibrary) {
                                         Button(onClick = requestAccess) { Text(stringResource(R.string.allow_access)) }
