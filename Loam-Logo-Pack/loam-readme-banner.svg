@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Loam Gallery banner</title>
+  <desc id="desc">A minimal earthy banner for the Loam Gallery GitHub repository.</desc>
+  <rect width="1280" height="640" rx="44" fill="#171912"/>
+  <circle cx="1130" cy="-5" r="265" fill="#D5A85A" opacity=".12"/>
+  <circle cx="85" cy="650" r="300" fill="#8DA06F" opacity=".12"/>
+  <g transform="translate(126 104) scale(.844)">
+    <rect width="512" height="512" rx="112" fill="#695C43"/>
+    <rect x="104" y="86" width="304" height="340" rx="52" fill="#F7F2E8"/>
+    <circle cx="323" cy="177" r="37" fill="#D5A85A"/>
+    <path d="M140 353l95-112 64 66 54-76 53 72v71H140z" fill="#8DA06F"/>
+    <path d="M140 353l95-112 64 66 20-28 87 95H140z" fill="#66774F" opacity=".82"/>
+  </g>
+  <text x="640" y="290" fill="#F7F2E8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="142" font-weight="700" letter-spacing="-5">Loam</text>
+  <text x="648" y="362" fill="#BCCB9B" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="38" font-weight="600" letter-spacing="11">GALLERY</text>
+  <text x="650" y="425" fill="#C9C4B8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="27">A calm home for your photos and videos.</text>
+</svg>

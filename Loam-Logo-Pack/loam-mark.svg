@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Loam Gallery mark</title>
+  <desc id="desc">An earthy rounded square containing a cream gallery frame, green landscape, and amber sun.</desc>
+  <rect width="512" height="512" rx="112" fill="#695C43"/>
+  <rect x="104" y="86" width="304" height="340" rx="52" fill="#F7F2E8"/>
+  <circle cx="323" cy="177" r="37" fill="#D5A85A"/>
+  <path d="M140 353l95-112 64 66 54-76 53 72v71H140z" fill="#8DA06F"/>
+  <path d="M140 353l95-112 64 66 20-28 87 95H140z" fill="#66774F" opacity=".82"/>
+</svg>
