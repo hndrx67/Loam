@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/hndrx67/Loam/actions"><img src="https://img.shields.io/github/actions/workflow/status/hndrx67/Loam/android.yml?branch=main&style=flat-square" alt="Build Status"></a>
-  <a href="https://github.com/hndrx67/Loam/releases"><img src="https://img.shields.io/badge/version-1.4.6--beta-blue?style=flat-square" alt="Version"></a>
+  <a href="https://github.com/hndrx67/Loam/releases"><img src="https://img.shields.io/badge/version-1.0.4--beta-blue?style=flat-square" alt="Version"></a>
   <a href="https://github.com/hndrx67/Loam/stargazers"><img src="https://img.shields.io/github/stars/hndrx67/Loam?style=flat-square" alt="Stars"></a>
   <a href="https://github.com/hndrx67/Loam/network/members"><img src="https://img.shields.io/github/forks/hndrx67/Loam?style=flat-square" alt="Forks"></a>
   <a href="https://github.com/hndrx67/Loam/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL%20v2-yellow.svg?style=flat-square" alt="License"></a>
