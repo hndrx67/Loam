@@ -1,6 +1,8 @@
 
+![Loam — Android photo and video gallery](Loam-Logo-Pack/loam-design-d-1024.png)
+
 <p align="center">
-  <img src="(Loam-Logo-Pack/loam-design-d-1024.png" alt="Loam logo" width="160">
+  <img src="Loam-Logo-Pack/loam-design-d-1024.png" alt="Loam logo" width="160">
 </p>
 
 # Loam
