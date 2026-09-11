@@ -2,7 +2,7 @@
   <img src="Loam-Logo-Pack/loam-design-d-1024.png" alt="Loam logo" width="160">
 </p>
 
-<h1 align="center">Loam</h1>
+<h1 align="center">Loam Gallery</h1>
 
 <p align="center">
   <a href="https://github.com/hndrx67/Loam/actions"><img src="https://img.shields.io/github/actions/workflow/status/hndrx67/Loam/android.yml?branch=main&style=flat-square" alt="Build Status"></a>
