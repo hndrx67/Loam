@@ -4,6 +4,11 @@ import android.content.ClipData
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.background
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import org.hndrx.loamgallery.model.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -69,16 +74,40 @@ fun LoamApp(vm: GalleryViewModel, requestAccess: () -> Unit, openSettings: () ->
     var menu by remember { mutableStateOf(false) }
     val viewerItems by vm.viewerCollection.collectAsStateWithLifecycle()
     val libraryStateHolder = rememberSaveableStateHolder()
+    val savedAlbums by vm.savedAlbums.collectAsStateWithLifecycle()
+    var selection by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
+    var selectedAlbums by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
+    var createAlbum by rememberSaveable { mutableStateOf(false) }
+    var addAlbum by rememberSaveable { mutableStateOf(false) }
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    val selecting = selection.isNotEmpty() || selectedAlbums.isNotEmpty()
+    fun clearSelection() { selection = arrayListOf(); selectedAlbums = arrayListOf() }
+    fun toggleMedia(item: MediaAsset) { val key = item.uri.toString(); selection = ArrayList(selection.toMutableSet().apply { if (!add(key)) remove(key) }) }
+    fun toggleAlbum(id: String) { selectedAlbums = ArrayList(selectedAlbums.toMutableSet().apply { if (!add(id)) remove(id) }) }
     val media = library.media
-    val visible = remember(media, favorites, tab, albumId, query) {
+    val allAlbums = remember(media, savedAlbums, preferences.albumSort) {
+        val byUri = media.associateBy { it.uri.toString() }
+        sortedAlbums(media.groupBy { it.bucketId }.map { (id, items) -> GalleryAlbum(id, items.first().bucketName, items) } +
+            savedAlbums.map { album -> GalleryAlbum(album.id, album.name, album.uris.mapNotNull { byUri[it] }.sortedByDescending { it.dateAdded }, true) }, preferences.albumSort)
+    }
+    val selectedMedia = remember(media, selection, selectedAlbums, allAlbums) {
+        (media.filter { it.uri.toString() in selection } + allAlbums.filter { it.id in selectedAlbums }.flatMap { it.media }).distinctBy { it.uri }
+    }
+    LaunchedEffect(media, allAlbums, library.loaded, library.loading) {
+        if (!library.loaded || library.loading) return@LaunchedEffect
+        selection = ArrayList(selection.filter { key -> media.any { it.uri.toString() == key } })
+        selectedAlbums = ArrayList(selectedAlbums.filter { key -> allAlbums.any { it.id == key } })
+    }
+    val visible = remember(media, favorites, tab, albumId, query, allAlbums) {
         val search = query.trim()
+        val albumUris = allAlbums.firstOrNull { it.id == albumId }?.media?.map { it.uri.toString() }?.toSet().orEmpty()
         if (albumId == null && tab != Tab.Favorites && search.isEmpty()) media else media.filter {
-            (albumId == null || it.bucketId == albumId) &&
+            (albumId == null || it.uri.toString() in albumUris) &&
                 (tab != Tab.Favorites || it.id.toString() in favorites) &&
                 (search.isEmpty() || it.name.contains(search, true) || it.bucketName.contains(search, true))
         }
     }
-    val albums = remember(visible) { visible.groupBy { it.bucketId }.values.sortedBy { it.first().bucketName.lowercase() } }
+    val albums = remember(allAlbums, query) { allAlbums.filter { it.name.contains(query.trim(), true) } }
     val byUri = remember(media) { media.associateBy { it.uri.toString() } }
     val session = remember(viewerItems, visible, byUri) {
         viewerItems.ifEmpty { visible }.mapNotNull { byUri[it.uri.toString()] }
@@ -89,9 +118,9 @@ fun LoamApp(vm: GalleryViewModel, requestAccess: () -> Unit, openSettings: () ->
     LaunchedEffect(tab, recycleBin) { if (tab == Tab.Settings) vm.refreshTrash() }
     val viewing = external != null || (selectedUri != null && session.isNotEmpty())
     fun back() {
-        when { recycleBin -> recycleBin = false; searching -> { searching = false; query = "" }; albumId != null -> albumId = null }
+        when { selecting -> clearSelection(); recycleBin -> recycleBin = false; searching -> { searching = false; query = "" }; albumId != null -> albumId = null }
     }
-    BackHandler(enabled = !viewing && (albumId != null || searching || recycleBin)) { back() }
+    BackHandler(enabled = !viewing && (selecting || albumId != null || searching || recycleBin)) { back() }
     LoamTheme(preferences) {
         ImageLoading(preferences) {
             val imageLoader = LocalLoamImages.current
@@ -110,7 +139,7 @@ fun LoamApp(vm: GalleryViewModel, requestAccess: () -> Unit, openSettings: () ->
                     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
                     val pageTitle = when {
                         recycleBin -> stringResource(R.string.recycle_bin)
-                        albumId != null -> media.firstOrNull { it.bucketId == albumId }?.bucketName ?: stringResource(R.string.album)
+                        albumId != null -> allAlbums.firstOrNull { it.id == albumId }?.name ?: stringResource(R.string.album)
                         else -> stringResource(tab.label)
                     }
                     Scaffold(
@@ -129,7 +158,7 @@ fun LoamApp(vm: GalleryViewModel, requestAccess: () -> Unit, openSettings: () ->
                                         DropdownMenu(menu, { menu = false }) {
                                             DropdownMenuItem(text = { Text(stringResource(R.string.refresh)) }, onClick = { menu = false; if (recycleBin) vm.refreshTrash() else vm.refresh() }, leadingIcon = { Icon(Icons.Default.Refresh, null) })
                                             DropdownMenuItem(text = { Text(stringResource(R.string.manage_access)) }, onClick = { menu = false; requestAccess() }, leadingIcon = { Icon(Icons.Default.PhotoLibrary, null) })
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.settings)) }, onClick = { menu = false; tab = Tab.Settings; albumId = null; searching = false; query = "" }, leadingIcon = { Icon(Icons.Default.Settings, null) })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.settings)) }, onClick = { menu = false; clearSelection(); tab = Tab.Settings; albumId = null; searching = false; query = "" }, leadingIcon = { Icon(Icons.Default.Settings, null) })
                                         }
                                     }
                                 },
@@ -141,7 +170,7 @@ fun LoamApp(vm: GalleryViewModel, requestAccess: () -> Unit, openSettings: () ->
                         bottomBar = {
                             if (albumId == null) NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                                 Tab.entries.forEach { item ->
-                                    NavigationBarItem(selected = tab == item, onClick = { tab = item; recycleBin = false; searching = false; query = "" }, icon = {
+                                    NavigationBarItem(selected = tab == item, onClick = { clearSelection(); tab = item; recycleBin = false; searching = false; query = "" }, icon = {
                                         Icon(when (item) { Tab.Pictures -> Icons.Default.Photo; Tab.Albums -> Icons.Default.Collections; Tab.Favorites -> Icons.Default.FavoriteBorder; Tab.Settings -> Icons.Default.Settings }, null)
                                     }, label = { Text(stringResource(item.label), fontWeight = if (tab == item) FontWeight.Bold else FontWeight.Medium) })
                                 }
@@ -155,6 +184,12 @@ fun LoamApp(vm: GalleryViewModel, requestAccess: () -> Unit, openSettings: () ->
                                 trailingIcon = { IconButton(onClick = { query = ""; searching = false }) { Icon(Icons.Default.Close, stringResource(R.string.clear_search)) } }, shape = RoundedCornerShape(28.dp))
                             if (tab != Tab.Settings && library.access == MediaAccess.Limited) Notice(stringResource(R.string.limited_access), stringResource(R.string.choose_media), requestAccess)
                             if (tab != Tab.Settings && library.failed) Notice(stringResource(R.string.load_failed), stringResource(R.string.retry), vm::refresh)
+                            if (selecting) SelectionBar(selection.size + selectedAlbums.size, busy,
+                                clear = ::clearSelection,
+                                selectAll = { if (tab == Tab.Albums && albumId == null) selectedAlbums = ArrayList(albums.map { it.id }) else selection = ArrayList(visible.map { it.uri.toString() }) },
+                                delete = { confirmDelete = true }, add = { addAlbum = true }, canAdd = selectedMedia.isNotEmpty())
+                            if (tab == Tab.Albums && albumId == null) AlbumControls(preferences.albumSort,
+                                { vm.updateSettings(preferences.copy(albumSort = it)) }, { createAlbum = true })
                             if (library.loading && tab != Tab.Settings) LinearProgressIndicator(Modifier.fillMaxWidth())
                             Box(Modifier.weight(1f).fillMaxWidth()) {
                                 when {
@@ -162,27 +197,43 @@ fun LoamApp(vm: GalleryViewModel, requestAccess: () -> Unit, openSettings: () ->
                                     tab == Tab.Settings -> gridStateHolder.SaveableStateProvider("settings") {
                                         SettingsScreen(preferences, library.access, trash.items.size, vm::updateSettings,
                                             { recycleBin = true }, requestAccess, openSettings, { imageLoader.memoryCache?.clear(); vm.cacheCleared() },
-                                            preload, library.loaded && !library.loading && library.media.any { !it.isVideo }, vm::startThumbnailPreload)
+                                            preload, library.loaded && !library.loading && library.media.any { !it.isVideo }, vm::startThumbnailPreload, vm::cancelThumbnailPreload)
                                     }
                                     library.access == MediaAccess.None -> EmptyState(R.string.permission_title, R.string.permission_message, Icons.Default.PhotoLibrary) {
                                         Button(onClick = requestAccess) { Text(stringResource(R.string.allow_access)) }
                                         Text(stringResource(R.string.permission_help), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                                         TextButton(onClick = openSettings) { Text(stringResource(R.string.open_settings)) }
                                     }
-                                    visible.isEmpty() && !library.loading -> EmptyState(
+                                    visible.isEmpty() && !library.loading && !(tab == Tab.Albums && albumId == null && albums.isNotEmpty()) -> EmptyState(
                                         when { library.failed -> R.string.load_failed; query.isNotBlank() -> R.string.no_results; albumId != null -> R.string.empty_album; tab == Tab.Favorites -> R.string.empty_favorites; else -> R.string.empty_library },
                                         when { library.failed -> R.string.load_failed_message; query.isNotBlank() -> R.string.no_results_message; albumId != null -> R.string.empty_album_message; tab == Tab.Favorites -> R.string.empty_favorites_message; else -> R.string.empty_library_message },
                                         if (tab == Tab.Favorites) Icons.Default.FavoriteBorder else Icons.Default.PhotoLibrary,
                                     )
                                     else -> gridStateHolder.SaveableStateProvider("${tab.name}:${albumId.orEmpty()}") {
-                                        if (tab == Tab.Albums && albumId == null) AlbumGrid(albums) { albumId = it }
-                                        else MediaGrid(visible, preferences.columns, favorites) { vm.openCollection(visible); selectedUri = it.uri.toString() }
+                                        if (tab == Tab.Albums && albumId == null) AlbumGrid(albums, selectedAlbums.toSet(), selecting, preferences.scrollbar, ::toggleAlbum) { if (selecting) toggleAlbum(it) else albumId = it }
+                                        else MediaGrid(visible, preferences.columns, favorites, selection.toSet(), selecting, preferences.scrollbar, ::toggleMedia) { if (selecting) toggleMedia(it) else { vm.openCollection(visible); selectedUri = it.uri.toString() } }
                                     }
                                 }
                             }
                         }
                     }
                 }
+                if (createAlbum) CreateAlbumDialog(onDismiss = { createAlbum = false }, create = { name ->
+                    vm.createAlbum(name, if (addAlbum) selectedMedia.map { it.uri.toString() }.toSet() else emptySet()).also { success ->
+                        if (success) { createAlbum = false; if (addAlbum) { addAlbum = false; clearSelection() } }
+                    }
+                })
+                if (addAlbum && !createAlbum) AlbumPicker(savedAlbums, { addAlbum = false }, { createAlbum = true }) { id ->
+                    vm.addToAlbum(id, selectedMedia.map { it.uri.toString() }.toSet()); addAlbum = false; clearSelection()
+                }
+                if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false },
+                    title = { Text(stringResource(R.string.delete_selection)) },
+                    text = { Text(stringResource(R.string.delete_selection_description, selectedMedia.size)) },
+                    confirmButton = { TextButton(onClick = {
+                        vm.requestBulkTrash(selectedMedia, allAlbums.filter { it.id in selectedAlbums && it.custom }.map { it.id }.toSet())
+                        confirmDelete = false; clearSelection()
+                    }, enabled = !busy) { Text(stringResource(R.string.delete)) } },
+                    dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } })
                 if (viewing) SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 150.dp))
                 if (externalError) AlertDialog(onDismissRequest = vm::dismissExternalError,
                     confirmButton = { TextButton(onClick = vm::dismissExternalError) { Text(stringResource(R.string.close)) } },
@@ -202,10 +253,12 @@ private fun Notice(text: String, action: String, onAction: () -> Unit) {
 }
 
 @Composable
-private fun MediaGrid(media: List<MediaAsset>, columns: Int, favorites: Set<String>, open: (MediaAsset) -> Unit) {
+private fun MediaGrid(media: List<MediaAsset>, columns: Int, favorites: Set<String>, selected: Set<String>, selecting: Boolean, scrollbar: Boolean, hold: (MediaAsset) -> Unit, open: (MediaAsset) -> Unit) {
     val zone = ZoneId.systemDefault()
     val sections = remember(media, zone) { media.groupBy { Instant.ofEpochSecond(it.dateAdded).atZone(zone).toLocalDate() } }
-    LazyVerticalGrid(GridCells.Fixed(columns), contentPadding = PaddingValues(bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    val state = rememberLazyGridState()
+    Box(Modifier.fillMaxSize()) {
+    LazyVerticalGrid(GridCells.Fixed(columns), state = state, contentPadding = PaddingValues(bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Text(pluralStringResource(R.plurals.item_count, media.size, media.size), Modifier.padding(horizontal = 20.dp, vertical = 12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
         }
@@ -214,8 +267,9 @@ private fun MediaGrid(media: List<MediaAsset>, columns: Int, favorites: Set<Stri
                 Text(dateLabel(date), Modifier.padding(start = 20.dp, top = 20.dp, bottom = 12.dp), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
             }
             items(items, key = { it.uri.toString() }, contentType = { "media" }) { item ->
-                Box(Modifier.aspectRatio(1f).clickable { open(item) }) {
+                Box(Modifier.aspectRatio(1f).semantics { this.selected = item.uri.toString() in selected }.combinedClickable(onClick = { open(item) }, onLongClick = { hold(item) })) {
                     MediaPreview(item.uri, item.name, Modifier.fillMaxSize(), ContentScale.Crop)
+                    if (selecting) SelectionMark(item.uri.toString() in selected)
                     if (item.id.toString() in favorites) Icon(Icons.Default.Favorite, null, Modifier.align(Alignment.TopEnd).padding(6.dp).size(16.dp), tint = Color.White)
                     if (item.isVideo) Surface(Modifier.align(Alignment.BottomEnd).padding(5.dp), color = Color.Black.copy(alpha = .6f), shape = RoundedCornerShape(6.dp)) {
                         Row(Modifier.padding(horizontal = 5.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -227,21 +281,40 @@ private fun MediaGrid(media: List<MediaAsset>, columns: Int, favorites: Set<Stri
             }
         }
     }
+    GalleryScrollbar(state, scrollbar)
+    }
 }
 
 @Composable
-private fun AlbumGrid(albums: List<List<MediaAsset>>, open: (String) -> Unit) {
-    LazyVerticalGrid(GridCells.Adaptive(150.dp), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+private fun AlbumGrid(albums: List<GalleryAlbum>, selected: Set<String>, selecting: Boolean, scrollbar: Boolean, hold: (String) -> Unit, open: (String) -> Unit) {
+    val state = rememberLazyGridState()
+    Box(Modifier.fillMaxSize()) {
+    LazyVerticalGrid(GridCells.Adaptive(150.dp), state = state, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
         item(span = { GridItemSpan(maxLineSpan) }) { Text(pluralStringResource(R.plurals.album_count, albums.size, albums.size), Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        items(albums, key = { it.first().bucketId }, contentType = { "album" }) { items ->
-            val cover = items.first()
-            Column(Modifier.clip(RoundedCornerShape(20.dp)).clickable { open(cover.bucketId) }) {
-                MediaPreview(cover.uri, cover.bucketName, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)), ContentScale.Crop)
-                Text(cover.bucketName, Modifier.padding(top = 10.dp, start = 4.dp, end = 4.dp), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(pluralStringResource(R.plurals.item_count, items.size, items.size), Modifier.padding(start = 4.dp, top = 2.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        items(albums, key = { it.id }, contentType = { "album" }) { album ->
+            Column(Modifier.clip(RoundedCornerShape(20.dp)).semantics { this.selected = album.id in selected }
+                .combinedClickable(onClick = { open(album.id) }, onLongClick = { hold(album.id) })) {
+                Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                    val cover = album.media.firstOrNull()
+                    if (cover != null) MediaPreview(cover.uri, album.name, Modifier.fillMaxSize(), ContentScale.Crop)
+                    else Icon(Icons.Default.Collections, null, Modifier.align(Alignment.Center).size(40.dp))
+                    if (selecting) SelectionMark(album.id in selected)
+                }
+                Text(album.name, Modifier.padding(top = 10.dp, start = 4.dp, end = 4.dp), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(pluralStringResource(R.plurals.item_count, album.media.size, album.media.size), Modifier.padding(start = 4.dp, top = 2.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
         }
     }
+    GalleryScrollbar(state, scrollbar)
+    }
+}
+
+@Composable
+private fun BoxScope.SelectionMark(checked: Boolean) {
+    if (checked) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = .25f)))
+    Icon(if (checked) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+        stringResource(if (checked) R.string.item_selected else R.string.select_item),
+        Modifier.align(Alignment.TopStart).padding(8.dp).size(26.dp), tint = if (checked) MaterialTheme.colorScheme.primary else Color.White)
 }
 
 @Composable

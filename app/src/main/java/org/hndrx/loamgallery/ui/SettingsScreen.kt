@@ -26,7 +26,7 @@ import org.hndrx.loamgallery.model.*
 @Composable
 fun SettingsScreen(settings: AppSettings, access: MediaAccess, trashCount: Int, update: (AppSettings) -> Unit,
     openBin: () -> Unit, requestAccess: () -> Unit, openSystemSettings: () -> Unit, clearCache: () -> Unit,
-    preload: org.hndrx.loamgallery.ThumbnailPreloadState, canPreload: Boolean, startPreload: () -> Unit) {
+    preload: org.hndrx.loamgallery.ThumbnailPreloadState, canPreload: Boolean, startPreload: () -> Unit, cancelPreload: () -> Unit) {
     var columns by remember(settings.columns) { mutableFloatStateOf(settings.columns.toFloat()) }
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item {
@@ -77,6 +77,12 @@ fun SettingsScreen(settings: AppSettings, access: MediaAccess, trashCount: Int, 
                 SettingSwitch(R.string.video_thumbnails, R.string.video_thumbnails_description, settings.videoThumbnails) { update(settings.copy(videoThumbnails = it)) }
                 SettingSwitch(R.string.image_transitions, R.string.image_transitions_description, settings.transitions) { update(settings.copy(transitions = it)) }
                 SettingSwitch(R.string.watch_changes, R.string.watch_changes_description, settings.watchChanges) { update(settings.copy(watchChanges = it)) }
+                TextButton(onClick = clearCache, enabled = !preload.running) { Text(stringResource(R.string.clear_cache)) }
+                TextButton(onClick = { update(settings.resetPerformance()) }) { Text(stringResource(R.string.reset_performance)) }
+            }
+        }
+        item {
+            SettingsSection(R.string.performance_ii, experimental = true, danger = true) {
                 HelpText(R.string.thumbnail_preload_description)
                 Button(onClick = startPreload, enabled = canPreload && !preload.running) {
                     Text(stringResource(R.string.start_thumbnail_preload))
@@ -84,11 +90,17 @@ fun SettingsScreen(settings: AppSettings, access: MediaAccess, trashCount: Int, 
                 if (preload.total > 0) {
                     if (preload.running) LinearProgressIndicator(
                         progress = { preload.completed.toFloat() / preload.total }, modifier = Modifier.fillMaxWidth())
-                    Text(stringResource(if (preload.running) R.string.thumbnail_preload_progress else R.string.thumbnail_preload_complete,
+                    Text(stringResource(if (preload.running) R.string.thumbnail_preload_progress else if (preload.cancelled) R.string.thumbnail_preload_cancelled else R.string.thumbnail_preload_complete,
                         preload.completed - preload.failed, preload.total, preload.failed), style = MaterialTheme.typography.bodySmall)
                 }
-                TextButton(onClick = clearCache, enabled = !preload.running) { Text(stringResource(R.string.clear_cache)) }
-                TextButton(onClick = { update(settings.resetPerformance()) }) { Text(stringResource(R.string.reset_performance)) }
+                if (preload.running) TextButton(onClick = cancelPreload, enabled = !preload.cancelled) { Text(stringResource(R.string.cancel)) }
+            }
+        }
+        item {
+            SettingsSection(R.string.features_section) {
+                SettingSwitch(R.string.gallery_scrollbar, R.string.gallery_scrollbar_description, settings.scrollbar) {
+                    update(settings.copy(scrollbar = it))
+                }
             }
         }
         item {
@@ -122,10 +134,13 @@ fun SettingsScreen(settings: AppSettings, access: MediaAccess, trashCount: Int, 
 }
 
 @Composable
-private fun SettingsSection(title: Int, experimental: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+private fun SettingsSection(title: Int, experimental: Boolean = false, danger: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f, false))
+            if (danger) Surface(color = MaterialTheme.colorScheme.errorContainer, shape = RoundedCornerShape(8.dp)) {
+                Text(stringResource(R.string.danger), Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
+            }
             if (experimental) Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(8.dp)) {
                 Text(stringResource(R.string.experimental), Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
             }

@@ -20,11 +20,15 @@ class SettingsStore(private val prefs: SharedPreferences) {
             videoThumbnails = prefs.getBoolean("videoThumbnails", true),
             transitions = prefs.getBoolean("transitions", false),
             watchChanges = prefs.getBoolean("watchChanges", true),
+            scrollbar = prefs.getBoolean("scrollbar", true),
+            albumSort = enumPreference(prefs.getString("albumSort", null), AlbumSort.NameAscending),
             filmstrip = prefs.getBoolean("filmstrip", true),
         ).sanitized()
     }
 
     fun write(settings: AppSettings) = prefs.edit {
+        putBoolean("scrollbar", settings.scrollbar)
+        putString("albumSort", settings.albumSort.name)
         putString("theme", settings.theme.name); putString("palette", settings.palette.name)
         putInt("columns", settings.columns); putInt("thumbnailSize", settings.thumbnailSize)
         putInt("memoryCacheMb", settings.memoryCacheMb); putBoolean("prefetch", settings.prefetch)

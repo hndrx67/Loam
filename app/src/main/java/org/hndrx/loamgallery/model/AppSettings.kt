@@ -1,6 +1,8 @@
 package org.hndrx.loamgallery.model
 
 enum class ThemeMode { System, Light, Dark }
+enum class AlbumSort { NameAscending, NameDescending, Newest, MostItems }
+
 enum class Palette { Blue, Sage, Violet, Rose, Amber }
 
 data class AppSettings(
@@ -14,6 +16,8 @@ data class AppSettings(
     val videoThumbnails: Boolean = true,
     val transitions: Boolean = false,
     val watchChanges: Boolean = true,
+    val scrollbar: Boolean = true,
+    val albumSort: AlbumSort = AlbumSort.NameAscending,
     val filmstrip: Boolean = true,
 ) {
     fun sanitized() = copy(

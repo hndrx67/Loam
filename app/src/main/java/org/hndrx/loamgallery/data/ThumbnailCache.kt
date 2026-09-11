@@ -9,6 +9,7 @@ import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.size.Scale
 import coil3.toBitmap
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.hndrx.loamgallery.model.AppSettings
@@ -28,7 +29,8 @@ object ThumbnailCache {
 
     suspend fun preload(context: Context, loader: ImageLoader, uri: Uri, settings: AppSettings) = withContext(Dispatchers.IO) {
         val target = file(context, uri, settings)
-        // Refresh on every explicit run, including pictures edited since the last run.
+        if (target.isFile && target.length() > 0L) return@withContext
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
         val result = loader.execute(ImageRequest.Builder(context).data(uri)
             .size(settings.thumbnailSize).scale(Scale.FILL).allowHardware(false).build())
         check(result is SuccessResult) { "Thumbnail decoding failed" }
@@ -36,6 +38,7 @@ object ThumbnailCache {
         val temporary = File.createTempFile("thumbnail", ".tmp", target.parentFile)
         try {
             temporary.outputStream().use { check(result.image.toBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)) }
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
             check(temporary.renameTo(target)) { "Thumbnail cache write failed" }
         } finally {
             temporary.delete()

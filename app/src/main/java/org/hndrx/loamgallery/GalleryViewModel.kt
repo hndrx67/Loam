@@ -40,7 +40,7 @@ data class LibraryState(
     val access: MediaAccess = MediaAccess.None,
 )
 
-data class ThumbnailPreloadState(val running: Boolean = false, val completed: Int = 0, val total: Int = 0, val failed: Int = 0)
+data class ThumbnailPreloadState(val running: Boolean = false, val completed: Int = 0, val total: Int = 0, val failed: Int = 0, val cancelled: Boolean = false)
 
 data class TrashState(val items: List<TrashEntry> = emptyList(), val loading: Boolean = false, val failed: Boolean = false)
 data class OperationConsent(val sender: IntentSender?, val permission: String? = null, val token: String = UUID.randomUUID().toString())
@@ -50,8 +50,15 @@ class GalleryViewModel(app: Application, private val savedState: SavedStateHandl
     val thumbnailPreload = _thumbnailPreload.asStateFlow()
     private var thumbnailJob: Job? = null
 
+    fun cancelThumbnailPreload() {
+        if (_thumbnailPreload.value.running) {
+            _thumbnailPreload.value = _thumbnailPreload.value.copy(cancelled = true)
+            thumbnailJob?.cancel()
+        }
+    }
+
     fun startThumbnailPreload() {
-        if (thumbnailJob?.isActive == true || _library.value.loading || !_library.value.loaded) return
+        if (thumbnailJob?.isCompleted == false || _library.value.loading || !_library.value.loaded) return
         val pictures = _library.value.media.filter { !it.isVideo }.toList()
         val options = _settings.value
         if (pictures.isEmpty()) return
@@ -78,6 +85,29 @@ class GalleryViewModel(app: Application, private val savedState: SavedStateHandl
 
     private val repository = MediaRepository(app)
     private val prefs = app.getSharedPreferences("loam", 0)
+    private val albumStore = org.hndrx.loamgallery.data.AlbumStore(prefs)
+    private val _savedAlbums = MutableStateFlow(albumStore.read())
+    val savedAlbums = _savedAlbums.asStateFlow()
+
+    fun createAlbum(name: String, uris: Set<String> = emptySet()): Boolean {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty() || trimmed.length > 80 || _savedAlbums.value.any { it.name.equals(trimmed, true) }) return false
+        saveAlbums(_savedAlbums.value + org.hndrx.loamgallery.model.SavedAlbum("loam:" + UUID.randomUUID(), trimmed, uris))
+        return true
+    }
+
+    fun addToAlbum(id: String, uris: Set<String>) {
+        saveAlbums(_savedAlbums.value.map { if (it.id == id) it.copy(uris = it.uris + uris) else it })
+        _message.value = R.string.album_updated
+    }
+
+    fun removeAlbums(ids: Set<String>) { saveAlbums(_savedAlbums.value.filterNot { it.id in ids }) }
+
+    private fun saveAlbums(albums: List<org.hndrx.loamgallery.model.SavedAlbum>) {
+        albumStore.write(albums)
+        _savedAlbums.value = albums
+    }
+
     private val settingsStore = SettingsStore(prefs)
     private val actions = MediaActions(app, repository)
     private val _library = MutableStateFlow(LibraryState())
@@ -114,6 +144,8 @@ class GalleryViewModel(app: Application, private val savedState: SavedStateHandl
         if (pending != null && !pending.getBoolean("launched")) {
             savedState.remove<Bundle>("operation")
             _operationBusy.value = false
+            savedState.remove<ArrayList<Bundle>>("operationQueue")
+            savedState.remove<ArrayList<String>>("albumsToRemove")
             _message.value = R.string.operation_interrupted
         }
     }
@@ -205,6 +237,17 @@ class GalleryViewModel(app: Application, private val savedState: SavedStateHandl
         }
     }
 
+    fun requestBulkTrash(items: List<MediaAsset>, albumIds: Set<String> = emptySet()) {
+        if (_operationBusy.value) return
+        if (items.isEmpty()) { removeAlbums(albumIds); return }
+        savedState["albumsToRemove"] = ArrayList(albumIds)
+        val unique = items.distinctBy { it.uri }
+        savedState["operationQueue"] = ArrayList(unique.drop(1).map { asset -> Bundle().apply {
+            assetMetadata(asset).forEach { (key, value) -> putString(key, value) }
+        } })
+        requestOperation(unique.first(), MediaAction.Trash)
+    }
+
     fun requestOperation(asset: MediaAsset, action: MediaAction, localKey: String? = null) {
         if (_operationBusy.value) return
         savedState["operation"] = Bundle().apply {
@@ -235,7 +278,12 @@ class GalleryViewModel(app: Application, private val savedState: SavedStateHandl
                 _consent.value = OperationConsent(null, Manifest.permission.ACCESS_MEDIA_LOCATION)
                 return@launch
             }
-            val sender = actions.execute(asset, action, pending.getString("localKey"))
+            val sender = if (Build.VERSION.SDK_INT >= 30 && action == MediaAction.Trash && savedState.contains("operationQueue")) {
+                val extra = savedState.get<ArrayList<Bundle>>("operationQueue").orEmpty().take(199)
+                pending.putInt("batchExtra", extra.size)
+                android.provider.MediaStore.createTrashRequest(getApplication<Application>().contentResolver,
+                    listOf(asset.uri) + extra.map { it.getString("uri")!!.toUri() }, true).intentSender
+            } else actions.execute(asset, action, pending.getString("localKey"))
             if (sender != null) {
                 pending.putString("phase", "native")
                 savedState["operation"] = pending
@@ -276,7 +324,7 @@ class GalleryViewModel(app: Application, private val savedState: SavedStateHandl
     fun operationLaunchFailed() { finishOperation(R.string.operation_failed) }
     fun dismissMessage() { _message.value = null }
     fun cacheCleared() {
-        if (thumbnailJob?.isActive == true) return
+        if (thumbnailJob?.isCompleted == false) return
         thumbnailJob = viewModelScope.launch {
             try {
                 org.hndrx.loamgallery.data.ThumbnailCache.clear(getApplication())
@@ -287,9 +335,22 @@ class GalleryViewModel(app: Application, private val savedState: SavedStateHandl
     }
 
     private fun finishOperation(message: Int) {
+        val batchExtra = savedState.get<Bundle>("operation")?.getInt("batchExtra") ?: 0
         savedState.remove<Bundle>("operation")
         _operationBusy.value = false
         _consent.value = null
+        if (message == R.string.operation_complete) {
+            val queue = savedState.get<ArrayList<Bundle>>("operationQueue").orEmpty().drop(batchExtra)
+            if (queue.isNotEmpty()) {
+                savedState["operationQueue"] = ArrayList(queue.drop(1))
+                val next = queue.first()
+                requestOperation(assetFromMetadata(next.keySet().associateWith { next.getString(it).orEmpty() }), MediaAction.Trash)
+                return
+            }
+        }
+        if (message == R.string.operation_complete) removeAlbums(savedState.get<ArrayList<String>>("albumsToRemove").orEmpty().toSet())
+        savedState.remove<ArrayList<String>>("albumsToRemove")
+        savedState.remove<ArrayList<Bundle>>("operationQueue")
         _message.value = message
         refresh()
         refreshTrash()

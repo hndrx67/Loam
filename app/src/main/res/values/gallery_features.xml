@@ -1,0 +1,26 @@
+<resources>
+    <string name="performance_ii">Performance II</string>
+    <string name="danger">Danger</string>
+    <string name="features_section">Features</string>
+    <string name="gallery_scrollbar">Gallery scrollbar</string>
+    <string name="gallery_scrollbar_description">Show a draggable scrollbar on the right while scrolling through pictures and albums.</string>
+    <string name="thumbnail_preload_cancelled">Preload cancelled: %1$d of %2$d saved; %3$d failed. Start again to continue.</string>
+    <string name="album_updated">Items added to album.</string>
+    <string name="delete_selection">Delete selection</string>
+    <string name="delete_selection_description">Move %1$d pictures and videos to the recycle bin? Selected Loam albums will also be removed after deletion succeeds. Android may ask for approval.</string>
+    <string name="item_selected">Selected</string>
+    <string name="select_item">Select item</string>
+    <string name="clear_selection">Clear selection</string>
+    <string name="selected_count">%1$d selected</string>
+    <string name="select_all">Select all</string>
+    <string name="add_to_album">Add to album</string>
+    <string name="create_album">Create album</string>
+    <string name="sort_albums">Sort albums</string>
+    <string name="sort_name_ascending">Name: A to Z</string>
+    <string name="sort_name_descending">Name: Z to A</string>
+    <string name="sort_newest">Newest pictures first</string>
+    <string name="sort_most_items">Most items first</string>
+    <string name="loam_album_description">Loam albums organize your pictures and videos inside this app. Original files stay in place.</string>
+    <string name="album_name">Album name</string>
+    <string name="album_name_error">Use a unique album name between 1 and 80 characters.</string>
+</resources>
